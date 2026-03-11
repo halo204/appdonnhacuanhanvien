@@ -8,7 +8,7 @@ package com.example.donvesinhcuanv.data
  */
 object AppConfig {
     // Đổi thành true để kết nối Firebase
-    const val USE_FIREBASE = true
+    const val USE_FIREBASE = true  // Bật Firebase để đăng ký/đăng nhập
     
     // Thông tin app
     const val APP_NAME = "CleanService Worker"

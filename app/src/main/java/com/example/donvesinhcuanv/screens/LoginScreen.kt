@@ -27,7 +27,8 @@ import com.example.donvesinhcuanv.viewmodel.AuthViewModel
 fun LoginScreen(
     viewModel: AuthViewModel,
     onLoginSuccess: () -> Unit,
-    onNavigateToRegister: () -> Unit
+    onNavigateToRegister: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit = {}
 ) {
     var email by remember { mutableStateOf("user@example.com") }
     var password by remember { mutableStateOf("") }
@@ -180,22 +181,36 @@ fun LoginScreen(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // Remember me checkbox
+                // Remember me and Forgot password
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Checkbox(
-                        checked = rememberMe,
-                        onCheckedChange = { rememberMe = it },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = Color(0xFF4CAF50)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = rememberMe,
+                            onCheckedChange = { rememberMe = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Color(0xFF4CAF50)
+                            )
                         )
-                    )
-                    Text(
-                        text = "Nhớ tài khoản",
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
+                        Text(
+                            text = "Nhớ tài khoản",
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    
+                    TextButton(onClick = onNavigateToForgotPassword) {
+                        Text(
+                            text = "Quên mật khẩu?",
+                            fontSize = 14.sp,
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
                 }
                 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -253,21 +268,11 @@ fun LoginScreen(
                     )
                 ) {
                     Text(
-                        text = "Đăng ký bằng số điện thoại",
+                        text = "Đăng ký",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Note
-                Text(
-                    text = "Lưu ý: Sau khi đăng ký bằng số điện thoại, bạn sẽ tự động đăng nhập và không cần đăng nhập lại.",
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
         }
     }

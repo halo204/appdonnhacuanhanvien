@@ -60,3 +60,20 @@ enum class WorkerStatus {
     APPROVED,   // Đã được duyệt
     REJECTED    // Bị từ chối
 }
+
+// Model cho lịch sử công việc (Firestore)
+data class JobHistoryItem(
+    val jobId: String,
+    val serviceName: String,
+    val price: Int,
+    val completedAt: Long,
+    val scheduledDate: Long
+)
+
+// Model cho thống kê thu nhập (Firestore)
+data class EarningsStats(
+    val totalEarnings: Int,
+    val totalJobs: Int,
+    val averagePerJob: Int,
+    val period: String // "today", "week", "month", "custom"
+)

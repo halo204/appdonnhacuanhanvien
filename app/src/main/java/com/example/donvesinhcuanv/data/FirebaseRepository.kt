@@ -3,6 +3,8 @@ package com.example.donvesinhcuanv.data
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.database.*
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -10,11 +12,18 @@ import kotlinx.coroutines.tasks.await
 
 class FirebaseRepository {
     private val auth = FirebaseAuth.getInstance()
-    private val database = FirebaseDatabase.getInstance()
     
-    // References
+    // Realtime Database - cho real-time updates
+    private val database = FirebaseDatabase.getInstance()
     private val workersRef = database.getReference("workers")
     private val jobsRef = database.getReference("jobs")
+    
+    // Firestore - cho queries phức tạp và analytics
+    private val firestore = FirebaseFirestore.getInstance()
+    private val workersCollection = firestore.collection("workers")
+    private val jobsCollection = firestore.collection("jobs")
+    private val jobHistoryCollection = firestore.collection("jobHistory")
+    private val analyticsCollection = firestore.collection("analytics")
     
     // Auth
     fun getCurrentUser(): FirebaseUser? = auth.currentUser
@@ -24,8 +33,10 @@ class FirebaseRepository {
             val result = auth.createUserWithEmailAndPassword(email, password).await()
             val user = result.user ?: throw Exception("User creation failed")
             
-            // Tạo worker profile
-            val worker = hashMapOf(
+            val timestamp = System.currentTimeMillis()
+            
+            // Tạo worker profile trong Realtime Database (cho real-time status)
+            val realtimeWorker = hashMapOf(
                 "id" to user.uid,
                 "name" to fullName,
                 "email" to email,
@@ -37,8 +48,25 @@ class FirebaseRepository {
                 "isOnline" to false,
                 "createdAt" to ServerValue.TIMESTAMP
             )
+            workersRef.child(user.uid).setValue(realtimeWorker).await()
             
-            workersRef.child(user.uid).setValue(worker).await()
+            // Tạo worker profile trong Firestore (cho queries và analytics)
+            val firestoreWorker = hashMapOf(
+                "id" to user.uid,
+                "name" to fullName,
+                "email" to email,
+                "phone" to phone,
+                "completedJobs" to 0,
+                "averageRating" to 0.0,
+                "totalEarnings" to 0,
+                "todayEarnings" to 0,
+                "status" to WorkerStatus.PENDING.name,
+                "specialties" to emptyList<String>(),
+                "createdAt" to timestamp,
+                "updatedAt" to timestamp
+            )
+            workersCollection.document(user.uid).set(firestoreWorker).await()
+            
             Result.success(user)
         } catch (e: Exception) {
             Result.failure(e)
@@ -103,22 +131,33 @@ class FirebaseRepository {
     
     suspend fun updateWorkerEarnings(userId: String, amount: Int): Result<Unit> {
         return try {
-            val workerRef = workersRef.child(userId)
-            
-            // Get current values
-            val snapshot = workerRef.get().await()
+            // Get current values from Realtime DB
+            val snapshot = workersRef.child(userId).get().await()
             val currentTotal = snapshot.child("totalEarnings").getValue(Int::class.java) ?: 0
             val currentToday = snapshot.child("todayEarnings").getValue(Int::class.java) ?: 0
             val completedJobs = snapshot.child("completedJobs").getValue(Int::class.java) ?: 0
             
-            // Update values
-            val updates = hashMapOf<String, Any>(
-                "totalEarnings" to (currentTotal + amount),
-                "todayEarnings" to (currentToday + amount),
-                "completedJobs" to (completedJobs + 1)
-            )
+            val newTotal = currentTotal + amount
+            val newToday = currentToday + amount
+            val newCompleted = completedJobs + 1
             
-            workerRef.updateChildren(updates).await()
+            // Update Realtime Database
+            val realtimeUpdates = hashMapOf<String, Any>(
+                "totalEarnings" to newTotal,
+                "todayEarnings" to newToday,
+                "completedJobs" to newCompleted
+            )
+            workersRef.child(userId).updateChildren(realtimeUpdates).await()
+            
+            // Update Firestore
+            val firestoreUpdates = hashMapOf<String, Any>(
+                "totalEarnings" to newTotal,
+                "todayEarnings" to newToday,
+                "completedJobs" to newCompleted,
+                "updatedAt" to System.currentTimeMillis()
+            )
+            workersCollection.document(userId).update(firestoreUpdates).await()
+            
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -240,11 +279,40 @@ class FirebaseRepository {
     
     suspend fun completeJob(jobId: String): Result<Unit> {
         return try {
-            val updates = hashMapOf<String, Any>(
+            val timestamp = System.currentTimeMillis()
+            
+            // Update Realtime Database
+            val realtimeUpdates = hashMapOf<String, Any>(
                 "status" to "COMPLETED",
                 "completedAt" to ServerValue.TIMESTAMP
             )
-            jobsRef.child(jobId).updateChildren(updates).await()
+            jobsRef.child(jobId).updateChildren(realtimeUpdates).await()
+            
+            // Get job data để lưu vào history
+            val jobSnapshot = jobsRef.child(jobId).get().await()
+            
+            // Lưu vào Firestore job history (cho analytics và báo cáo)
+            val jobHistory = hashMapOf(
+                "jobId" to jobId,
+                "workerId" to (jobSnapshot.child("workerId").getValue(String::class.java) ?: ""),
+                "customerId" to (jobSnapshot.child("customerId").getValue(String::class.java) ?: ""),
+                "serviceName" to (jobSnapshot.child("serviceName").getValue(String::class.java) ?: ""),
+                "price" to (jobSnapshot.child("price").getValue(Int::class.java) ?: 0),
+                "completedAt" to timestamp,
+                "scheduledDate" to (jobSnapshot.child("scheduledDate").getValue(Long::class.java) ?: timestamp),
+                "status" to "COMPLETED"
+            )
+            jobHistoryCollection.add(jobHistory).await()
+            
+            // Update Firestore job document
+            jobsCollection.document(jobId).update(
+                mapOf(
+                    "status" to "COMPLETED",
+                    "completedAt" to timestamp,
+                    "updatedAt" to timestamp
+                )
+            ).await()
+            
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -319,7 +387,10 @@ class FirebaseRepository {
         phone: String
     ): Result<Unit> {
         return try {
-            val worker = hashMapOf(
+            val timestamp = System.currentTimeMillis()
+            
+            // Realtime Database
+            val realtimeWorker = hashMapOf(
                 "id" to userId,
                 "name" to name,
                 "phone" to phone,
@@ -332,8 +403,25 @@ class FirebaseRepository {
                 "status" to WorkerStatus.PENDING.name,
                 "createdAt" to ServerValue.TIMESTAMP
             )
+            workersRef.child(userId).setValue(realtimeWorker).await()
             
-            workersRef.child(userId).setValue(worker).await()
+            // Firestore
+            val firestoreWorker = hashMapOf(
+                "id" to userId,
+                "name" to name,
+                "phone" to phone,
+                "email" to "",
+                "completedJobs" to 0,
+                "averageRating" to 0.0,
+                "totalEarnings" to 0,
+                "todayEarnings" to 0,
+                "status" to WorkerStatus.PENDING.name,
+                "specialties" to emptyList<String>(),
+                "createdAt" to timestamp,
+                "updatedAt" to timestamp
+            )
+            workersCollection.document(userId).set(firestoreWorker).await()
+            
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -360,5 +448,167 @@ class FirebaseRepository {
         workersRef.child(userId).addValueEventListener(listener)
         
         awaitClose { workersRef.child(userId).removeEventListener(listener) }
+    }
+    
+    // ============ FIRESTORE METHODS - Analytics & Complex Queries ============
+    
+    // Lấy lịch sử công việc của worker (từ Firestore)
+    suspend fun getWorkerJobHistory(
+        workerId: String,
+        limit: Int = 50
+    ): Result<List<JobHistoryItem>> {
+        return try {
+            val snapshot = jobHistoryCollection
+                .whereEqualTo("workerId", workerId)
+                .orderBy("completedAt", Query.Direction.DESCENDING)
+                .limit(limit.toLong())
+                .get()
+                .await()
+            
+            val history = snapshot.documents.mapNotNull { doc ->
+                try {
+                    JobHistoryItem(
+                        jobId = doc.getString("jobId") ?: "",
+                        serviceName = doc.getString("serviceName") ?: "",
+                        price = doc.getLong("price")?.toInt() ?: 0,
+                        completedAt = doc.getLong("completedAt") ?: 0L,
+                        scheduledDate = doc.getLong("scheduledDate") ?: 0L
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            
+            Result.success(history)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // Thống kê thu nhập theo ngày (từ Firestore)
+    suspend fun getEarningsStatistics(
+        workerId: String,
+        startDate: Long,
+        endDate: Long
+    ): Result<EarningsStats> {
+        return try {
+            val snapshot = jobHistoryCollection
+                .whereEqualTo("workerId", workerId)
+                .whereGreaterThanOrEqualTo("completedAt", startDate)
+                .whereLessThanOrEqualTo("completedAt", endDate)
+                .get()
+                .await()
+            
+            var totalEarnings = 0
+            var totalJobs = 0
+            
+            snapshot.documents.forEach { doc ->
+                totalEarnings += doc.getLong("price")?.toInt() ?: 0
+                totalJobs++
+            }
+            
+            val stats = EarningsStats(
+                totalEarnings = totalEarnings,
+                totalJobs = totalJobs,
+                averagePerJob = if (totalJobs > 0) totalEarnings / totalJobs else 0,
+                period = "custom"
+            )
+            
+            Result.success(stats)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // Tìm kiếm workers theo specialties (từ Firestore)
+    suspend fun searchWorkersBySpecialty(specialty: String): Result<List<Worker>> {
+        return try {
+            val snapshot = workersCollection
+                .whereArrayContains("specialties", specialty)
+                .whereEqualTo("status", WorkerStatus.APPROVED.name)
+                .get()
+                .await()
+            
+            val workers = snapshot.documents.mapNotNull { doc ->
+                try {
+                    Worker(
+                        id = doc.getString("id") ?: "",
+                        name = doc.getString("name") ?: "",
+                        email = doc.getString("email") ?: "",
+                        phone = doc.getString("phone") ?: "",
+                        completedJobs = doc.getLong("completedJobs")?.toInt() ?: 0,
+                        averageRating = doc.getDouble("averageRating") ?: 0.0,
+                        totalEarnings = doc.getLong("totalEarnings")?.toInt() ?: 0,
+                        todayEarnings = doc.getLong("todayEarnings")?.toInt() ?: 0,
+                        specialties = (doc.get("specialties") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                        status = WorkerStatus.valueOf(doc.getString("status") ?: "PENDING"),
+                        createdAt = doc.getLong("createdAt") ?: 0L
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            
+            Result.success(workers)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // Lấy top workers theo rating (từ Firestore)
+    suspend fun getTopWorkers(limit: Int = 10): Result<List<Worker>> {
+        return try {
+            val snapshot = workersCollection
+                .whereEqualTo("status", WorkerStatus.APPROVED.name)
+                .orderBy("averageRating", Query.Direction.DESCENDING)
+                .limit(limit.toLong())
+                .get()
+                .await()
+            
+            val workers = snapshot.documents.mapNotNull { doc ->
+                try {
+                    Worker(
+                        id = doc.getString("id") ?: "",
+                        name = doc.getString("name") ?: "",
+                        email = doc.getString("email") ?: "",
+                        phone = doc.getString("phone") ?: "",
+                        completedJobs = doc.getLong("completedJobs")?.toInt() ?: 0,
+                        averageRating = doc.getDouble("averageRating") ?: 0.0,
+                        totalEarnings = doc.getLong("totalEarnings")?.toInt() ?: 0,
+                        todayEarnings = doc.getLong("todayEarnings")?.toInt() ?: 0,
+                        specialties = (doc.get("specialties") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                        status = WorkerStatus.valueOf(doc.getString("status") ?: "PENDING"),
+                        createdAt = doc.getLong("createdAt") ?: 0L
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            
+            Result.success(workers)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // Lưu analytics event (từ Firestore)
+    suspend fun logAnalyticsEvent(
+        eventType: String,
+        userId: String,
+        data: Map<String, Any>
+    ): Result<Unit> {
+        return try {
+            val event = hashMapOf(
+                "eventType" to eventType,
+                "userId" to userId,
+                "timestamp" to System.currentTimeMillis(),
+                "data" to data
+            )
+            
+            analyticsCollection.add(event).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

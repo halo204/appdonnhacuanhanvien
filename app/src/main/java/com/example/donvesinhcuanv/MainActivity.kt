@@ -60,7 +60,9 @@ fun WorkerApp() {
     // Ẩn bottom bar ở màn hình login và register
     val showBottomBar = currentRoute !in listOf(
         Screen.Login.route,
-        Screen.Register.route,
+        Screen.ForgotPassword.route,
+        Screen.RegistrationMethod.route,
+        Screen.EmailRegister.route,
         Screen.PhoneRegister.route
     )
     

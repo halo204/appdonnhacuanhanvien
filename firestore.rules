@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Workers collection
+    match /workers/{workerId} {
+      // Anyone authenticated can read worker profiles
+      allow read: if isAuthenticated();
+      
+      // Only the worker can update their own profile
+      allow create: if isOwner(workerId);
+      allow update: if isOwner(workerId);
+      allow delete: if false; // No deletion allowed
+    }
+    
+    // Jobs collection
+    match /jobs/{jobId} {
+      // Anyone authenticated can read jobs
+      allow read: if isAuthenticated();
+      
+      // Workers and customers can create/update jobs
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        isOwner(resource.data.workerId) ||
+        isOwner(resource.data.customerId)
+      );
+      allow delete: if false; // No deletion, only status updates
+    }
+    
+    // Job history - read only for the worker who completed it
+    match /jobHistory/{historyId} {
+      allow read: if isAuthenticated() && 
+                     isOwner(resource.data.workerId);
+      
+      // Only system can write (through backend)
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+    
+    // Analytics - write only, no reads
+    match /analytics/{eventId} {
+      allow read: if false; // Only backend can read
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+    
+    // Services collection (if you add it later)
+    match /services/{serviceId} {
+      allow read: if true; // Public read
+      allow write: if false; // Only admin can write
+    }
+  }
+}

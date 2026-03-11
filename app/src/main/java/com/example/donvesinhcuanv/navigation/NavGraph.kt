@@ -11,7 +11,9 @@ import com.example.donvesinhcuanv.viewmodel.JobViewModel
 
 sealed class Screen(val route: String) {
     object Login : Screen("login")
-    object Register : Screen("register")
+    object ForgotPassword : Screen("forgot_password")
+    object RegistrationMethod : Screen("registration_method")
+    object EmailRegister : Screen("email_register")
     object PhoneRegister : Screen("phone_register")
     object Home : Screen("home")
     object JobList : Screen("job_list")
@@ -40,12 +42,40 @@ fun NavGraph(
                     }
                 },
                 onNavigateToRegister = {
-                    navController.navigate(Screen.PhoneRegister.route)
+                    navController.navigate(Screen.RegistrationMethod.route)
+                },
+                onNavigateToForgotPassword = {
+                    navController.navigate(Screen.ForgotPassword.route)
                 }
             )
         }
         
-        composable(Screen.Register.route) {
+        composable(Screen.ForgotPassword.route) {
+            ForgotPasswordScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onResetSuccess = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        composable(Screen.RegistrationMethod.route) {
+            RegistrationMethodScreen(
+                onNavigateToEmailRegister = {
+                    navController.navigate(Screen.EmailRegister.route)
+                },
+                onNavigateToPhoneRegister = {
+                    navController.navigate(Screen.PhoneRegister.route)
+                },
+                onNavigateToLogin = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        composable(Screen.EmailRegister.route) {
             RegisterScreen(
                 viewModel = authViewModel,
                 onRegisterSuccess = {
@@ -54,7 +84,9 @@ fun NavGraph(
                     }
                 },
                 onNavigateToLogin = {
-                    navController.popBackStack()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.RegistrationMethod.route) { inclusive = true }
+                    }
                 },
                 onBackClick = {
                     navController.popBackStack()
@@ -71,7 +103,9 @@ fun NavGraph(
                     }
                 },
                 onNavigateToLogin = {
-                    navController.popBackStack()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.RegistrationMethod.route) { inclusive = true }
+                    }
                 }
             )
         }
