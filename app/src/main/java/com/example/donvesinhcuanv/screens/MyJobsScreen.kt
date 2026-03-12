@@ -28,7 +28,10 @@ import java.util.*
 @Composable
 fun MyJobsScreen(viewModel: JobViewModel) {
     val acceptedJobs by viewModel.acceptedJobs.collectAsState()
-    val completedJobs by viewModel.completedJobs.collectAsState()
+    
+    // Filter jobs by status
+    val activeJobs = acceptedJobs.filter { it.status != JobStatus.COMPLETED }
+    val completedJobs = acceptedJobs.filter { it.status == JobStatus.COMPLETED }
     
     Column(
         modifier = Modifier
@@ -52,7 +55,7 @@ fun MyJobsScreen(viewModel: JobViewModel) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${acceptedJobs.size} đơn đang thực hiện",
+                    text = "${activeJobs.size} đơn đang thực hiện",
                     fontSize = 14.sp,
                     color = Color.Gray
                 )
@@ -67,7 +70,7 @@ fun MyJobsScreen(viewModel: JobViewModel) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Đơn đang thực hiện
-            if (acceptedJobs.isNotEmpty()) {
+            if (activeJobs.isNotEmpty()) {
                 item {
                     Text(
                         text = "Đang thực hiện",
@@ -77,7 +80,7 @@ fun MyJobsScreen(viewModel: JobViewModel) {
                     )
                 }
                 
-                items(acceptedJobs) { job ->
+                items(activeJobs) { job ->
                     ActiveJobCard(
                         job = job,
                         onArriving = { viewModel.startArriving(job) },
@@ -107,7 +110,7 @@ fun MyJobsScreen(viewModel: JobViewModel) {
             }
             
             // Empty state
-            if (acceptedJobs.isEmpty() && completedJobs.isEmpty()) {
+            if (acceptedJobs.isEmpty()) {
                 item {
                     Column(
                         modifier = Modifier

@@ -67,7 +67,7 @@ fun HomeScreen(
                             color = Color.Gray
                         )
                         Text(
-                            text = worker.name,
+                            text = worker?.name ?: "Nhân viên",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -99,13 +99,13 @@ fun HomeScreen(
                 ) {
                     EarningsCard(
                         title = "Hôm nay",
-                        amount = worker.todayEarnings,
+                        amount = worker?.todayEarnings ?: 0,
                         icon = Icons.Default.DateRange
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     EarningsCard(
                         title = "Tổng thu nhập",
-                        amount = worker.totalEarnings,
+                        amount = worker?.totalEarnings ?: 0,
                         icon = Icons.Default.AccountBalanceWallet
                     )
                 }

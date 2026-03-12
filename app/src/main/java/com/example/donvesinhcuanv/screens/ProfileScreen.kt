@@ -68,7 +68,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text(
-                        text = worker.name,
+                        text = worker?.name ?: "Nhân viên",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -85,14 +85,14 @@ fun ProfileScreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = String.format("%.1f", worker.averageRating),
+                            text = String.format("%.1f", worker?.averageRating ?: 0.0),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "(${worker.completedJobs} đơn)",
+                            text = "(${worker?.completedJobs ?: 0} đơn)",
                             fontSize = 14.sp,
                             color = Color.White.copy(alpha = 0.9f)
                         )
@@ -101,7 +101,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = worker.phone,
+                        text = worker?.phone ?: "",
                         fontSize = 14.sp,
                         color = Color.White.copy(alpha = 0.9f)
                     )
@@ -142,7 +142,7 @@ fun ProfileScreen(
                         ) {
                             EarningItem(
                                 title = "Hôm nay",
-                                amount = worker.todayEarnings,
+                                amount = worker?.todayEarnings ?: 0,
                                 icon = Icons.Default.Today,
                                 color = Color(0xFF2196F3)
                             )
@@ -156,7 +156,7 @@ fun ProfileScreen(
                             
                             EarningItem(
                                 title = "Tổng cộng",
-                                amount = worker.totalEarnings,
+                                amount = worker?.totalEarnings ?: 0,
                                 icon = Icons.Default.AccountBalanceWallet,
                                 color = Color(0xFF4CAF50)
                             )
